@@ -5,8 +5,10 @@
 // Preprocessor related;
 #undef UNICODE
 
+#define BIT(n) (1U<<(n))
+
 #define WIN32_LEAN_AND_MEAN
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
+//#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define ERROR_CODE 1 // -1
 
 #define PORT_STR "4865"
@@ -25,7 +27,8 @@
 #include <string>
 #include <iostream>
 
-#include <chrono>
+// Internal:
+#include "../3ds_controller/source/shared.h"
 
 // Libraries:
 #pragma comment (lib, "Ws2_32.lib")
@@ -52,9 +55,6 @@ int main()
 {
 	// Namespaces:
 	using namespace std;
-
-	// Constant variable(s):
-	static const chrono::seconds waitTime = (chrono::seconds)1;
 
 	// Local variable(s):
 	bool running = true;
@@ -124,27 +124,19 @@ int main()
 		freeaddrinfo(result); // result = nullptr;
 	}
 
-	const auto beginTime = chrono::high_resolution_clock::now();
-
 	sockaddr address;
 	int addrlen = sizeof(address);
 
-	while (clientSocket == INVALID_SOCKET)
+	cout << "Searching for 3DS..." << endl;
+
+	for (int i = 1; (i <= 4 && (clientSocket == INVALID_SOCKET)); i++)
 	{
-		if (chrono::duration_cast<chrono::seconds>(chrono::high_resolution_clock::now() - beginTime) > waitTime)
-		{
-			running = false;
-
-			break;
-		}
-
 		clientSocket = accept(listenSocket, &address, &addrlen);
 	}
 
 	if (clientSocket != INVALID_SOCKET)
 	{
-		cout << "Client found." << endl;
-		cout << "Address: " << inet_ntoa(*((in_addr*)&address)) << endl;
+		cout << "3DS found." << endl;
 	}
 
 	// Since we only need one connection, close the listening-socket:
@@ -155,7 +147,7 @@ int main()
 
 	while (running)
 	{
-		cout << "Waiting for an input packet..." << endl;
+		//cout << "Waiting for an input packet..." << endl;
 
 		inputData state;
 
@@ -163,7 +155,16 @@ int main()
 
 		if (iResult > 0)
 		{
-			cout << "Input state found (" << iResult << "bytes)" << endl;
+			//cout << "Input state found (" << iResult << "bytes)" << endl;
+			//cout << "Analog: " << state.analog.x << ", " << state.analog.y << endl;
+			
+			for (int i = 0; i < 32; i++)
+			{
+				if (state.kDown & BIT(i))
+				{
+					cout << debug_keyNames[i] << " down." << endl;
+				}
+			}
 		}
 		else if (iResult == 0)
 		{

@@ -18,8 +18,6 @@
 */
 
 // Preprocessor related:
-#define REMOTE_ADDRESS "192.168.1.6"
-
 #define INVALID_SOCKET (SOCKET)(~0)
 #define SOCKET_ERROR (-1)
 
@@ -39,11 +37,11 @@
 #include <3ds/services/soc.h>
 
 #include <errno.h> // cerror
+#include <malloc.h>
+
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
-
-#include <malloc.h>
 
 // Networking related:
 #include <sys/socket.h>
@@ -56,6 +54,9 @@
 #include <netinet/tcp.h>
 
 #include <netdb.h>
+
+// Internal:
+#include "shared.h"
 
 // Typedefs:
 typedef int SOCKET;
@@ -92,36 +93,32 @@ int main(int argc, char** argv)
 {
 	static const size_t packetSize = sizeof(inputData); // auto
 	static const u16 port = 4865;
-
-	// This is a debug-table, mapping bitwise positions to human-readable text.
-	static const char* keysNames[32] =
-	{
-		"KEY_A", "KEY_B", "KEY_SELECT", "KEY_START",
-		"KEY_DRIGHT", "KEY_DLEFT", "KEY_DUP", "KEY_DDOWN",
-		"KEY_R", "KEY_L", "KEY_X", "KEY_Y",
-		"", "", "KEY_ZL", "KEY_ZR",
-		"", "", "", "",
-		"KEY_TOUCH", "", "", "",
-		"KEY_CSTICK_RIGHT", "KEY_CSTICK_LEFT", "KEY_CSTICK_UP", "KEY_CSTICK_DOWN",
-		"KEY_CPAD_RIGHT", "KEY_CPAD_LEFT", "KEY_CPAD_UP", "KEY_CPAD_DOWN"
-	};
-
+	
 	// Initialize services:
 	gfxInitDefault();
-
+	
 	SOC_buffer = (u32*)memalign(SOC_ALIGN, SOC_BUFFERSIZE);
-
+	
 	if (SOC_Initialize(SOC_buffer, SOC_BUFFERSIZE) != 0)
 	{
 	    printf("Unable to initialize SOC.\n");
 
 	    return stop();
 	}
-
-	//printf("SOC Context: %d\n", context);
+	
+	char remoteAddress_str[256]; // INET_ADDRSTRLEN
 
 	// Initialize a console on the top screen.
 	consoleInit(GFX_TOP, NULL);
+	
+	{
+		// Read the remote address from the file-system.
+		FILE* addrFile = fopen("address.txt", "r");
+
+		fgets(remoteAddress_str, sizeof(remoteAddress_str), addrFile);
+
+		fclose(addrFile);
+	}
 
 	// Networking related:
 
@@ -144,16 +141,19 @@ int main(int argc, char** argv)
 
     remoteAddress.sin_family = AF_INET;
     remoteAddress.sin_port = htons(port);
-    remoteAddress.sin_addr.s_addr = inet_addr(REMOTE_ADDRESS);
+    remoteAddress.sin_addr.s_addr = inet_addr(remoteAddress_str);
 
-    //printf("Connecting to remote host...\n");//: %s, %d\n", REMOTE_ADDRESS, remoteAddress.sin_addr.s_addr);
+    printf("Address:\n");
+    printf(remoteAddress_str);
+    printf("\n");
+
+    //printf("Connecting to remote host...\n");
 	
     int connectResult = connect(connection, (sockaddr*)&remoteAddress, sizeof(remoteAddress));
 
     if (connectResult != 0)
     {
-    	printf("Connection failed: %i", connectResult);
-    	//printf("Unable to connect %d\n", connectResult);
+    	printf("Connection failed: %i\n", connectResult);
 
     	closesocket(connection);
 
@@ -196,7 +196,7 @@ int main(int argc, char** argv)
 		hidCircleRead(&newState.analog);
 
 		// Check for an exit operation:
-		if ((newState.kDown & KEY_START) && ((newState.kDown & KEY_SELECT) || (newState.kDown & KEY_L)))
+		if ((newState.kHeld & KEY_START) && ((newState.kHeld & KEY_SELECT) || (newState.kHeld & KEY_L)))
 		{
 			break;
 		}
@@ -219,9 +219,9 @@ int main(int argc, char** argv)
 				const auto mask = BIT(i);
 
 				// Check for input:
-				if (newState.kDown & mask) printf("%s down\n", keysNames[i]);
-				if (newState.kHeld & mask) printf("%s held\n", keysNames[i]);
-				if (newState.kUp & mask) printf("%s up\n", keysNames[i]);
+				if (newState.kDown & mask) printf("%s down\n", debug_keyNames[i]);
+				if (newState.kHeld & mask) printf("%s held\n", debug_keyNames[i]);
+				if (newState.kUp & mask) printf("%s up\n", debug_keyNames[i]);
 			}
 
 			// Print the CirclePad's position.
