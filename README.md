@@ -1,7 +1,7 @@
 # 3ds-controller
 A 3DS homebrew application that allows you to send input to a remote machine.
 
-Functionality is currently experimental, and does not simulate input.
+Functionality is currently experimental, and does not simulate input. This project is based on an input-demo from the official ctrulib examples.
 
 There is only support for Windows at this time. Input is sent as raw data, and does not (Currently) comply with network byte-order.
 
