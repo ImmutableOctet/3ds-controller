@@ -172,7 +172,7 @@ size_t simulateKey(UINT nativeKey, keyAction mode)
 	deviceAction.ki.time = 0;
 	deviceAction.ki.wVk = 0; // (DWORD)nativeKey;
 	deviceAction.ki.dwExtraInfo = 0;
-	deviceAction.ki.wScan = MapVirtualKey(nativeKey, MAPVK_VK_TO_VSC); // nativeKey
+	deviceAction.ki.wScan = MapVirtualKey(nativeKey, MAPVK_VK_TO_VSC); // MAPVK_VK_TO_VSC_EX// nativeKey
 
 	// Set the initial flags of this operation.
 	deviceAction.ki.dwFlags = KEYEVENTF_SCANCODE;
