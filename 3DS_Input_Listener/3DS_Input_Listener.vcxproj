@@ -66,6 +66,10 @@
   <ItemGroup>
     <ClCompile Include="Listener.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\3ds_controller\source\shared.h" />
+    <ClInclude Include="tables.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

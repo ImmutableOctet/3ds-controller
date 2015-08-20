@@ -163,7 +163,10 @@ int main(int argc, char** argv)
     int errCode = 0;
 
 	// This will represent the input-state.
-	inputData state = {};
+	inputData states[FRAMES_PER_SEND];
+
+	unsigned currentState = 0;
+	unsigned sendTimer = 0;
 
 	// Output initial information:
 	consoleClear();
@@ -195,14 +198,8 @@ int main(int argc, char** argv)
 		// Read the CirclePad's position.
 		hidCircleRead(&newState.analog);
 
-		// Check for an exit operation:
-		if ((newState.kHeld & KEY_START) && ((newState.kHeld & KEY_SELECT) || (newState.kHeld & KEY_L)))
-		{
-			break;
-		}
-
 		// This will check for input, and output accordingly:
-		if (memcmp(&state, &newState, sizeof(inputData)) != 0)
+		if (memcmp(&states+currentState, &newState, sizeof(inputData)) != 0)
 		{
 			// Clear the console.
 			consoleClear();
@@ -227,20 +224,36 @@ int main(int argc, char** argv)
 			// Print the CirclePad's position.
 			printf("\x1b[2;0H%04d; %04d", newState.analog.dx, newState.analog.dy);
 
-			if (send(connection, &newState, sizeof(inputData), 0) == SOCKET_ERROR)
+			// Update our current input-state.
+			states[currentState] = newState;
+
+			currentState += 1;
+		}
+
+		if ((sendTimer >= FRAMES_PER_SEND && currentState > 0) || currentState > FRAMES_PER_SEND)
+		{
+			if (send(connection, &newState, sizeof(inputData)*(currentState), 0) == SOCKET_ERROR)
 			{
 				errCode = -1;
 
 				break;
 			}
-		}
 
-		// Update our current input-state.
-		state = newState;
+			sendTimer = 0;
+			currentState = 0;
+		}
 
 		// Flush and swap the font and back buffers.
 		gfxFlushBuffers();
 		gfxSwapBuffers();
+
+		// Check for an exit operation:
+		if ((newState.kHeld & KEY_START) && ((newState.kHeld & KEY_SELECT) || (newState.kHeld & KEY_L)))
+		{
+			break;
+		}
+
+		sendTimer += 1;
 	}
 
 	// Deinitialize networking functionality:

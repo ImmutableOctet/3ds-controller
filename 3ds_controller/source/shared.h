@@ -3,6 +3,9 @@
 #ifndef _3DS_NETINPUT_SHARED_H
 	#define _3DS_NETINPUT_SHARED_H
 	
+	// The number of frames required to wait before sending a packet.
+	#define FRAMES_PER_SEND 8
+
 	// This is a debug-table that maps bitwise positions to human-readable text.
 	const char* debug_keyNames[32] =
 	{

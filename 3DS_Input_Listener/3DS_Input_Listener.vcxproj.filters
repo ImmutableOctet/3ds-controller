@@ -19,4 +19,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\3ds_controller\source\shared.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="tables.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>

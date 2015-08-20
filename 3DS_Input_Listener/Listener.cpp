@@ -15,24 +15,35 @@
 
 // Includes:
 #include <windows.h>
+//#include <winuser.h>
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
-#include <cstddef>
 #include <cstdint>
-#include <cstdlib>
+#include <climits>
+#include <cstring>
+//#include <cstddef>
 //#include <cstdio>
 
 #include <stdexcept>
-#include <string>
 #include <iostream>
+#include <string>
+#include <thread>
+#include <chrono>
+
+#include <QuickLib\QuickINI\QuickINI.h>
 
 // Internal:
-#include "../3ds_controller/source/shared.h"
+#include "tables.h"
 
 // Libraries:
 #pragma comment (lib, "Ws2_32.lib")
 //#pragma comment (lib, "Mswsock.lib")
+
+// Namespace(s):
+using namespace std;
+using namespace quickLib;
 
 // Structures:
 struct circlePosition
@@ -50,14 +61,168 @@ struct inputData
 	uint32_t kUp;
 };
 
+// Typedefs:
+
+// This may be used to map a 3DS button-position to a system-native key-code.
+typedef map<uint32_t, UINT> keyCodeMap;
+
+// Enumerator(s):
+enum keyAction
+{
+	ACTION_DOWN,
+	ACTION_UP,
+	//ACTION_HELD,
+};
+
+// Constant variable(s):
+static const string INI_3DS_SECTION = "3ds";
+
 // Functions:
+void mapDefaultKeys(INI::INIVariables<>& keyMap)
+{
+	auto& section = keyMap[INI_3DS_SECTION];
+
+	// A, B, Select, Start:
+	section[debug_keyNames[0]] = "VK_Z";
+	section[debug_keyNames[1]] = "VK_X";
+	section[debug_keyNames[2]] = "VK_D";
+	section[debug_keyNames[3]] = "VK_F";
+
+	// D-pad:
+	section[debug_keyNames[4]] = "VK_RIGHT";
+	section[debug_keyNames[5]] = "VK_LEFT";
+	section[debug_keyNames[6]] = "VK_UP";
+	section[debug_keyNames[7]] = "VK_DOWN";
+
+	// R, L, X, Y
+	section[debug_keyNames[8]] = "VK_E";
+	section[debug_keyNames[9]] = "VK_Q";
+	section[debug_keyNames[10]] = "VK_A";
+	section[debug_keyNames[11]] = "VK_S";
+
+	// ZL, ZR:
+	section[debug_keyNames[14]] = "VK_C";
+	section[debug_keyNames[15]] = "VK_V";
+
+	// Touch screen:
+	section[debug_keyNames[20]] = "VK_B";
+
+	// C-stick:
+	section[debug_keyNames[24]] = "VK_L";
+	section[debug_keyNames[25]] = "VK_J";
+	section[debug_keyNames[26]] = "VK_I";
+	section[debug_keyNames[27]] = "VK_K";
+
+	// Mapped CirclePad:
+	section[debug_keyNames[28]] = "VK_H";
+	section[debug_keyNames[29]] = "VK_F";
+	section[debug_keyNames[30]] = "VK_T";
+	section[debug_keyNames[31]] = "VK_G";
+
+	return;
+}
+
+UINT toSystemKey(const char* _3DSKey, const INI::INISection<>& keyMap)
+{
+	return virtualKeyMap.at(keyMap.at(_3DSKey)); // MapVirtualKey(..., MAPVK_VK_TO_VSC);
+}
+
+void remapKeys(const INI::INISection<>& keyMap, keyCodeMap& systemKeyMap)
+{
+	systemKeyMap[0] = toSystemKey("KEY_A", keyMap);
+	systemKeyMap[1] = toSystemKey("KEY_B", keyMap);
+	systemKeyMap[2] = toSystemKey("KEY_SELECT", keyMap);
+	systemKeyMap[3] = toSystemKey("KEY_START", keyMap);
+	
+	systemKeyMap[4] = toSystemKey("KEY_DRIGHT", keyMap);
+	systemKeyMap[5] = toSystemKey("KEY_DLEFT", keyMap);
+	systemKeyMap[6] = toSystemKey("KEY_DUP", keyMap);
+	systemKeyMap[7] = toSystemKey("KEY_DDOWN", keyMap);
+	
+	systemKeyMap[8] = toSystemKey("KEY_R", keyMap);
+	systemKeyMap[9] = toSystemKey("KEY_L", keyMap);
+	systemKeyMap[10] = toSystemKey("KEY_X", keyMap);
+	systemKeyMap[11] = toSystemKey("KEY_Y", keyMap);
+
+	systemKeyMap[14] = toSystemKey("KEY_ZL", keyMap);
+	systemKeyMap[15] = toSystemKey("KEY_ZR", keyMap);
+
+	systemKeyMap[20] = toSystemKey("KEY_TOUCH", keyMap);
+
+	systemKeyMap[24] = toSystemKey("KEY_CSTICK_RIGHT", keyMap);
+	systemKeyMap[25] = toSystemKey("KEY_CSTICK_LEFT", keyMap);
+	systemKeyMap[26] = toSystemKey("KEY_CSTICK_UP", keyMap);
+	systemKeyMap[27] = toSystemKey("KEY_CSTICK_DOWN", keyMap);
+
+	systemKeyMap[28] = toSystemKey("KEY_CPAD_RIGHT", keyMap);
+	systemKeyMap[29] = toSystemKey("KEY_CPAD_LEFT", keyMap);
+	systemKeyMap[30] = toSystemKey("KEY_CPAD_UP", keyMap);
+	systemKeyMap[31] = toSystemKey("KEY_CPAD_DOWN", keyMap);
+
+	return;
+}
+
+size_t simulateKey(UINT nativeKey, keyAction mode)
+{
+	// Local variable(s):
+	INPUT deviceAction;
+
+	// Set up the input-device descriptor:
+	deviceAction.type = INPUT_KEYBOARD;
+	deviceAction.ki.time = 0;
+	deviceAction.ki.wVk = 0; // (DWORD)nativeKey;
+	deviceAction.ki.dwExtraInfo = 0;
+	deviceAction.ki.wScan = MapVirtualKey(nativeKey, MAPVK_VK_TO_VSC); // nativeKey
+
+	// Set the initial flags of this operation.
+	deviceAction.ki.dwFlags = KEYEVENTF_SCANCODE;
+
+	// Check if this is an "extended key":
+	if ((nativeKey > 32 && nativeKey < 47) || (nativeKey > 90 && nativeKey < 94))
+		deviceAction.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+
+	// Check for mode-specific functionality:
+	switch (mode)
+	{
+		case ACTION_UP:
+			deviceAction.ki.dwFlags |= KEYEVENTF_KEYUP;
+
+			break;
+		case ACTION_DOWN:
+			// Nothing so far.
+
+			break;
+	}
+
+	// Simulate the input operation.
+	return (size_t)SendInput(1, &deviceAction, sizeof(deviceAction));
+}
+
 int main()
 {
-	// Namespaces:
-	using namespace std;
+	// Constant variable(s):
+	static const string configPath = "keymap.ini";
 
 	// Local variable(s):
 	bool running = true;
+
+	INI::INIVariables<> keyMap;
+
+	try
+	{
+		INI::load(configPath, keyMap);
+	}
+	catch (const INI::fileNotFound<>&)
+	{
+		mapDefaultKeys(keyMap);
+
+		// Save our newly generate key-map.
+		INI::save(configPath, keyMap);
+	}
+
+	keyCodeMap systemKeyMap;
+
+	remapKeys(keyMap[INI_3DS_SECTION], systemKeyMap);
 
 	WSADATA WSADATA;
 	int iResult;
@@ -98,7 +263,7 @@ int main()
 			throw runtime_error("Unable to create socket: " + to_string(WSAGetLastError()));
 		}
 
-		iResult = bind(listenSocket, result->ai_addr, (int)result->ai_addrlen);
+		iResult = ::bind(listenSocket, result->ai_addr, (int)result->ai_addrlen);
 
 		if (iResult == SOCKET_ERROR)
 		{
@@ -127,7 +292,7 @@ int main()
 	sockaddr address;
 	int addrlen = sizeof(address);
 
-	cout << "Searching for 3DS..." << endl;
+	cout << "Waiting for a 3DS..." << endl;
 
 	for (int i = 1; (i <= 4 && (clientSocket == INVALID_SOCKET)); i++)
 	{
@@ -149,20 +314,42 @@ int main()
 	{
 		//cout << "Waiting for an input packet..." << endl;
 
-		inputData state;
+		inputData states[FRAMES_PER_SEND];
 
-		iResult = recv(clientSocket, (char*)&state, sizeof(state), 0);
+		iResult = recv(clientSocket, (char*)&states, sizeof(states), 0);
 
 		if (iResult > 0)
 		{
-			//cout << "Input state found (" << iResult << "bytes)" << endl;
+			auto statesAvailable = (iResult / sizeof(inputData));
+
+			cout << statesAvailable << " input-states found. (" << iResult << "bytes)" << endl;
 			//cout << "Analog: " << state.analog.x << ", " << state.analog.y << endl;
-			
-			for (int i = 0; i < 32; i++)
+
+			for (unsigned sID = 0; sID < statesAvailable; sID++)
 			{
-				if (state.kDown & BIT(i))
+				const auto& state = states[sID];
+
+				for (int i = 0; i < 32; i++)
 				{
-					cout << debug_keyNames[i] << " down." << endl;
+					const auto mask = BIT(i);
+
+					if ((state.kDown & mask)) // || (state.kHeld & mask)
+					{
+						simulateKey(systemKeyMap[i], ACTION_DOWN);
+
+						cout << debug_keyNames[i] << " down." << endl;
+					}
+					else if (state.kUp & mask)
+					{
+						simulateKey(systemKeyMap[i], ACTION_UP);
+
+						cout << debug_keyNames[i] << " up." << endl;
+					}
+				}
+
+				if ((sID+1) < statesAvailable)
+				{
+					this_thread::sleep_for((chrono::milliseconds)16);
 				}
 			}
 		}
