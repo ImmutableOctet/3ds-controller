@@ -9,9 +9,12 @@
 
 #define WIN32_LEAN_AND_MEAN
 //#define _WINSOCK_DEPRECATED_NO_WARNINGS
+
 #define ERROR_CODE 1 // -1
 
 #define PORT_STR "4865"
+
+#define _3DS_NETINPUT_SHARED_SUPPORT_LIB
 
 // Includes:
 #include <windows.h>
@@ -44,22 +47,6 @@
 // Namespace(s):
 using namespace std;
 using namespace quickLib;
-
-// Structures:
-struct circlePosition
-{
-	int16_t x;
-	int16_t y;
-};
-
-struct inputData
-{
-	circlePosition analog;
-
-	uint32_t kDown;
-	uint32_t kHeld;
-	uint32_t kUp;
-};
 
 // Typedefs:
 
@@ -198,6 +185,13 @@ size_t simulateKey(UINT nativeKey, keyAction mode)
 	return (size_t)SendInput(1, &deviceAction, sizeof(deviceAction));
 }
 
+void clearConsole()
+{
+	system("CLS");
+
+	return;
+}
+
 int main()
 {
 	// Constant variable(s):
@@ -314,16 +308,27 @@ int main()
 	{
 		//cout << "Waiting for an input packet..." << endl;
 
-		inputData states[FRAMES_PER_SEND];
+		fullInputData states[FRAMES_PER_SEND] = {};
 
-		iResult = recv(clientSocket, (char*)&states, sizeof(states), 0);
+		iResult = recv(clientSocket, (char*)&states, sizeof(states), 0); // sizeof(fullInputData)*FRAMES_PER_SEND
 
 		if (iResult > 0)
 		{
-			auto statesAvailable = (iResult / sizeof(inputData));
+			//cout << "-----------" << endl;
+			clearConsole();
 
-			cout << statesAvailable << " input-states found. (" << iResult << "bytes)" << endl;
-			//cout << "Analog: " << state.analog.x << ", " << state.analog.y << endl;
+			auto statesAvailable = (iResult / sizeof(fullInputData));
+			
+			cout << statesAvailable << " input-state(s) found. (" << iResult << "bytes)" << endl;
+
+			const auto finalState = (statesAvailable-1);
+
+			cout << "Button states[finalState]: " << states[finalState].data.kHeld << endl;
+			cout << "Analog: " << states[finalState].ext.left_analog.dx << ", " << states[finalState].ext.left_analog.dy << endl;
+			//cout << "Gyro: " << states[finalState].ext.gyro.x << ", " << states[finalState].ext.gyro.y << ", " << states[finalState].ext.gyro.z << endl;
+			//cout << "Acceleration: " << states[finalState].ext.acceleration.x << ", " << states[finalState].ext.acceleration.y << ", " << states[finalState].ext.acceleration.z << endl;
+			cout << "Volume: " << (unsigned)states[finalState].meta.volume << endl;
+			cout << "Touch: " << states[finalState].ext.touch.px << ", " << states[finalState].ext.touch.py << endl;
 
 			for (unsigned sID = 0; sID < statesAvailable; sID++)
 			{
@@ -333,24 +338,29 @@ int main()
 				{
 					const auto mask = BIT(i);
 
-					if ((state.kDown & mask)) // || (state.kHeld & mask)
+					if (state.data.kHeld & mask) // ((state.kDown & mask))
 					{
+						//simulateKey(systemKeyMap[i], ACTION_DOWN);
+						simulateKey(systemKeyMap[i], ACTION_UP);
 						simulateKey(systemKeyMap[i], ACTION_DOWN);
 
 						cout << debug_keyNames[i] << " down." << endl;
 					}
-					else if (state.kUp & mask)
+					else if (state.data.kUp & mask)
 					{
+						//simulateKey(systemKeyMap[i], ACTION_DOWN);
 						simulateKey(systemKeyMap[i], ACTION_UP);
 
 						cout << debug_keyNames[i] << " up." << endl;
 					}
 				}
 
+				/*
 				if ((sID+1) < statesAvailable)
 				{
 					this_thread::sleep_for((chrono::milliseconds)16);
 				}
+				*/
 			}
 		}
 		else if (iResult == 0)

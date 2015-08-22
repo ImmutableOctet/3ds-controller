@@ -26,5 +26,8 @@
     <ClInclude Include="tables.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\3ds_controller\source\support.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
