@@ -3,16 +3,22 @@
 */
 
 // Preprocessor related;
-#undef UNICODE
-
 #define BIT(n) (1U<<(n))
+
+// Windows-specific:
+#define NOMINMAX
+#undef UNICODE
 
 #define WIN32_LEAN_AND_MEAN
 //#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
-#define ERROR_CODE 1 // -1
+#define _USE_MATH_DEFINES
 
 #define PORT_STR "4865"
+#define ERROR_CODE 1 // -1
+
+#define _3DS_CPAD_MAX 160 // 158 // 155 // 128
+#define _3DS_PAD_MASK (KEY_DUP|KEY_DDOWN|KEY_DLEFT|KEY_DRIGHT)
 
 #define _3DS_NETINPUT_SHARED_SUPPORT_LIB
 
@@ -26,14 +32,16 @@
 #include <cstdint>
 #include <climits>
 #include <cstring>
+#include <cmath>
 //#include <cstddef>
 //#include <cstdio>
 
 #include <stdexcept>
 #include <iostream>
 #include <string>
-#include <thread>
-#include <chrono>
+#include <algorithm>
+//#include <thread>
+//#include <chrono>
 
 #include <QuickLib\QuickINI\QuickINI.h>
 
@@ -46,6 +54,11 @@
 // Libraries:
 #pragma comment (lib, "Ws2_32.lib")
 //#pragma comment (lib, "Mswsock.lib")
+
+// Macro backups:
+#ifndef M_PI
+	#define M_PI 3.14159265358979323846
+#endif
 
 // Namespace(s):
 using namespace std;
@@ -80,24 +93,14 @@ enum vJoyIDs : UINT
 };
 
 // Functions:
-
-// Windows-specific (vJoy):
-
-// vJoy must be properly initialized before using this command.
-bool vJoyWorking()
+double joyHat(bool up, bool down, bool left, bool right)
 {
-	// Namespace(s):
-	using namespace vJoy;
+	return fmod(360.0 + (atan2(((right) ? 1.0 : ((left) ? -1.0 : 0.0)), ((up) ? 1.0 : ((down) ? -1.0 : 0.0))) * (180.0 / M_PI)), 360.0);
+}
 
-	// Resolve the current "driver" state:
-	if (REAL_VJOY::vJoyEnabled() == TRUE)
-	{
-		WORD DLLVer, DrvVer;
-
-		return (REAL_VJOY::DriverMatch(&DLLVer, &DrvVer) == TRUE);
-	}
-	
-	return false;
+double joyHat(const u32 buttons)
+{
+	return joyHat(((buttons & KEY_DUP) > 0), ((buttons & KEY_DDOWN) > 0), ((buttons & KEY_DLEFT) > 0), ((buttons & KEY_DRIGHT) > 0));
 }
 
 bool stringEnabled(const string& str)
@@ -287,6 +290,115 @@ void loadConfiguration(const string& configPath, INI::INIVariables<>& config, ke
 	}
 
 	remapKeys(config[INI_3DS_SECTION], systemKeyMap);
+
+	return;
+}
+
+// Windows-specific (vJoy):
+
+// vJoy must be properly initialized before using this command.
+bool vJoyWorking()
+{
+	// Namespace(s):
+	using namespace vJoy;
+
+	// Resolve the current "driver" state:
+	if (REAL_VJOY::vJoyEnabled() == TRUE)
+	{
+		WORD DLLVer, DrvVer;
+
+		return (REAL_VJOY::DriverMatch(&DLLVer, &DrvVer) == TRUE);
+	}
+	
+	return false;
+}
+
+LONG vJoyCapAxis(vJoy::vJoyDevice& device, const u32 value, const UINT axis, const UINT maximum_value=_3DS_CPAD_MAX) // SHRT_MAX
+{
+	// Local variable(s):
+	const auto axisInfo = device.getAxis(axis)->second;
+	const auto axis_mid = ((axisInfo.max - axisInfo.min) / 2);
+
+	return axis_mid + (value * (axis_mid / maximum_value));
+}
+
+LONG vJoyScaleAxis(vJoy::vJoyDevice& device, const u32 value, const UINT axis, const UINT maximum_value=_3DS_CPAD_MAX)
+{
+	// Local variable(s):
+	const auto axisInfo = device.getAxis(axis)->second;
+
+	return (value * ((axisInfo.max - axisInfo.min) / maximum_value));
+}
+
+// The 'value' argument depends on the axis used.
+void vJoyTransferAxis(vJoy::vJoyDevice& device, JOYSTICK_POSITION& vState, const u32 value, const UINT axis)
+{
+	if (device.hasAxis(axis))
+	{
+		switch (axis)
+		{
+			case HID_USAGE_X:
+				vState.wAxisX = vJoyCapAxis(device, value, axis);
+
+				break;
+			case HID_USAGE_Y:
+				vState.wAxisY = vJoyCapAxis(device, value, axis);
+
+				break;
+			case HID_USAGE_Z:
+				{
+					const LONG m = (device.axisMax(axis) / 2);
+
+					vState.wAxisZ = m;
+
+					if ((value & KEY_L) > 0)
+					{
+						vState.wAxisZ -= m;
+					}
+
+					if ((value & KEY_R) > 0)
+					{
+						vState.wAxisZ += m;
+					}
+				}
+
+				break;
+			case HID_USAGE_SL0:
+				vState.wSlider = vJoyScaleAxis(device, value, axis, 63); // 64
+			//case HID_USAGE_RX:
+			//case HID_USAGE_RY:
+			case HID_USAGE_POV:
+				{
+					if (device.contPOVNumber > 0)
+					{
+						if ((value & _3DS_PAD_MASK) > 0)
+						{
+							vState.bHats = (((DWORD)joyHat(value)) * 100);
+						}
+						else
+						{
+							// Disable the HAT.
+							vState.bHats = 36001;
+						}
+					}
+					else
+					{
+						if ((value & KEY_DRIGHT) > 0)
+							vState.bHats = 1;
+						else if ((value & KEY_DLEFT) > 0)
+							vState.bHats = 3;
+						else if ((value & KEY_DDOWN) > 0)
+							vState.bHats = 2;
+						else if ((value & KEY_DUP) > 0)
+							vState.bHats = 0;
+						else
+							vState.bHats = 4;
+					}
+				}
+		}
+
+		return;
+	}
 
 	return;
 }
@@ -496,7 +608,7 @@ int main()
 				{
 					const auto mask = BIT(i);
 
-					if (state.data.kHeld & mask) // ((state.kDown & mask))
+					if ((state.data.kHeld & mask) > 0) // ((state.kDown & mask) > 0)
 					{
 						if (keyboardEnabled)
 						{
@@ -505,7 +617,7 @@ int main()
 
 						cout << debug_keyNames[i] << " down." << endl;
 					}
-					else if (state.data.kUp & mask)
+					else if ((state.data.kUp & mask) > 0)
 					{
 						if (keyboardEnabled)
 						{
@@ -518,15 +630,53 @@ int main()
 
 				if (vJoyEnabled)
 				{
+
 					// Local variable(s):
 					const auto& ID = vJoy_3DS.deviceIdentifier;
 
 					JOYSTICK_POSITION vState = {};
 
 					vState.bDevice = ID;
+					vState.lButtons = (LONG)((state.data.kDown | state.data.kHeld)); // ^ state.data.kUp;
 
-					vState.lButtons = (LONG)((state.data.kDown | state.data.kHeld)); // ~ state.data.kUp;
+					// CirclePad:
+					if (vJoy_3DS.hasAxis(HID_USAGE_X))
+					{
+						vState.lButtons ^= (vState.lButtons & (KEY_CPAD_LEFT|KEY_CPAD_RIGHT));
+						vJoyTransferAxis(vJoy_3DS, vState, state.ext.left_analog.dx, HID_USAGE_X);
+					}
 
+					if (vJoy_3DS.hasAxis(HID_USAGE_Y))
+					{
+						vState.lButtons ^= (vState.lButtons & (KEY_CPAD_UP|KEY_CPAD_DOWN));
+						vJoyTransferAxis(vJoy_3DS, vState, state.ext.left_analog.dy, HID_USAGE_Y);
+					}
+
+					// D-pad:
+					if (vJoy_3DS.hasAxis(HID_USAGE_POV))
+					{
+						vState.lButtons ^= (vState.lButtons & _3DS_PAD_MASK);
+						vJoyTransferAxis(vJoy_3DS, vState, state.data.kHeld, HID_USAGE_POV);
+					}
+
+					vJoyTransferAxis(vJoy_3DS, vState, state.meta.volume, HID_USAGE_SL0);
+
+					// Trigger (L+R) axis:
+					/*
+					if (vJoy_3DS.hasAxis(HID_USAGE_Z))
+					{
+						vState.lButtons ^= (vState.lButtons & (KEY_L|KEY_R));
+						vJoyTransferAxis(vJoy_3DS, vState, state.data.kHeld, HID_USAGE_Z);
+					}
+					*/
+					
+					/*
+						// C-stick:
+						vJoyTransferAxis(vJoy_3DS, vState, state.ext.right_analog.dx, HID_USAGE_RX);
+						vJoyTransferAxis(vJoy_3DS, vState, state.ext.right_analog.dy, HID_USAGE_RY);
+					*/
+
+					// Update the device with the newly calculated state.
 					vJoy::REAL_VJOY::UpdateVJD(ID, &vState);
 				}
 

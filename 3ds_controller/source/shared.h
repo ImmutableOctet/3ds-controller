@@ -4,7 +4,7 @@
 	#define _3DS_NETINPUT_SHARED_H
 	
 	// The number of frames required to wait before sending a packet.
-	#define FRAMES_PER_SEND 8
+	#define FRAMES_PER_SEND 8 // 1
 
 	// Includes:
 	#ifdef _3DS_NETINPUT_SHARED_SUPPORT_LIB
