@@ -37,6 +37,9 @@
 
 #include <QuickLib\QuickINI\QuickINI.h>
 
+// External:
+#include "external/iosync/winnt/vjoyDriver.h"
+
 // Internal:
 #include "tables.h"
 
@@ -49,6 +52,9 @@ using namespace std;
 using namespace quickLib;
 
 // Typedefs:
+
+// Windows-specific (vJoy):
+typedef UINT vJoyButton; // WORD // DWORD
 
 // This may be used to map a 3DS button-position to a system-native key-code.
 typedef map<uint32_t, UINT> keyCodeMap;
@@ -64,10 +70,79 @@ enum keyAction
 // Constant variable(s):
 static const string INI_3DS_SECTION = "3ds";
 
-// Functions:
-void mapDefaultKeys(INI::INIVariables<>& keyMap)
+// Enumerator(s):
+
+// Windows-specific:
+enum vJoyIDs : UINT
 {
-	auto& section = keyMap[INI_3DS_SECTION];
+	VJOY_ID_NONE = 0,
+	MAX_VJOY_DEVICES = 16,
+};
+
+// Functions:
+
+// Windows-specific (vJoy):
+
+// vJoy must be properly initialized before using this command.
+bool vJoyWorking()
+{
+	// Namespace(s):
+	using namespace vJoy;
+
+	// Resolve the current "driver" state:
+	if (REAL_VJOY::vJoyEnabled() == TRUE)
+	{
+		WORD DLLVer, DrvVer;
+
+		return (REAL_VJOY::DriverMatch(&DLLVer, &DrvVer) == TRUE);
+	}
+	
+	return false;
+}
+
+bool stringEnabled(const string& str)
+{
+	const auto fc = str[0];
+
+	return (fc == 'y' || fc == 'Y' || fc == 't' || fc == 'T');
+}
+
+bool initSockets(bool output=true)
+{
+	// Windows-specific:
+	
+	// This is used to initialize WinSock.
+	WSADATA WSADATA;
+
+	auto iResult = WSAStartup(MAKEWORD(2, 2), &WSADATA);
+
+	if (iResult != 0)
+	{
+		if (output)
+		{
+			cout << "Unable to initialize WSA: " << iResult << endl;
+		}
+
+		return false;
+	}
+
+	// Return the default response.
+	return true;
+}
+
+void deinitSockets()
+{
+	// Windows-specific:
+
+	// Free up any resources allocated by WSA.
+	WSACleanup();
+
+	return;
+}
+
+void mapDefaultKeys(INI::INIVariables<>& config)
+{
+	auto& section = config[INI_3DS_SECTION];
 
 	// A, B, Select, Start:
 	section[debug_keyNames[0]] = "VK_Z";
@@ -109,42 +184,42 @@ void mapDefaultKeys(INI::INIVariables<>& keyMap)
 	return;
 }
 
-UINT toSystemKey(const char* _3DSKey, const INI::INISection<>& keyMap)
+UINT toSystemKey(const char* _3DSKey, const INI::INISection<>& config)
 {
-	return virtualKeyMap.at(keyMap.at(_3DSKey)); // MapVirtualKey(..., MAPVK_VK_TO_VSC);
+	return virtualKeyMap.at(config.at(_3DSKey)); // MapVirtualKey(..., MAPVK_VK_TO_VSC);
 }
 
-void remapKeys(const INI::INISection<>& keyMap, keyCodeMap& systemKeyMap)
+void remapKeys(const INI::INISection<>& config, keyCodeMap& systemKeyMap)
 {
-	systemKeyMap[0] = toSystemKey("KEY_A", keyMap);
-	systemKeyMap[1] = toSystemKey("KEY_B", keyMap);
-	systemKeyMap[2] = toSystemKey("KEY_SELECT", keyMap);
-	systemKeyMap[3] = toSystemKey("KEY_START", keyMap);
+	systemKeyMap[0] = toSystemKey("KEY_A", config);
+	systemKeyMap[1] = toSystemKey("KEY_B", config);
+	systemKeyMap[2] = toSystemKey("KEY_SELECT", config);
+	systemKeyMap[3] = toSystemKey("KEY_START", config);
 	
-	systemKeyMap[4] = toSystemKey("KEY_DRIGHT", keyMap);
-	systemKeyMap[5] = toSystemKey("KEY_DLEFT", keyMap);
-	systemKeyMap[6] = toSystemKey("KEY_DUP", keyMap);
-	systemKeyMap[7] = toSystemKey("KEY_DDOWN", keyMap);
+	systemKeyMap[4] = toSystemKey("KEY_DRIGHT", config);
+	systemKeyMap[5] = toSystemKey("KEY_DLEFT", config);
+	systemKeyMap[6] = toSystemKey("KEY_DUP", config);
+	systemKeyMap[7] = toSystemKey("KEY_DDOWN", config);
 	
-	systemKeyMap[8] = toSystemKey("KEY_R", keyMap);
-	systemKeyMap[9] = toSystemKey("KEY_L", keyMap);
-	systemKeyMap[10] = toSystemKey("KEY_X", keyMap);
-	systemKeyMap[11] = toSystemKey("KEY_Y", keyMap);
+	systemKeyMap[8] = toSystemKey("KEY_R", config);
+	systemKeyMap[9] = toSystemKey("KEY_L", config);
+	systemKeyMap[10] = toSystemKey("KEY_X", config);
+	systemKeyMap[11] = toSystemKey("KEY_Y", config);
 
-	systemKeyMap[14] = toSystemKey("KEY_ZL", keyMap);
-	systemKeyMap[15] = toSystemKey("KEY_ZR", keyMap);
+	systemKeyMap[14] = toSystemKey("KEY_ZL", config);
+	systemKeyMap[15] = toSystemKey("KEY_ZR", config);
 
-	systemKeyMap[20] = toSystemKey("KEY_TOUCH", keyMap);
+	systemKeyMap[20] = toSystemKey("KEY_TOUCH", config);
 
-	systemKeyMap[24] = toSystemKey("KEY_CSTICK_RIGHT", keyMap);
-	systemKeyMap[25] = toSystemKey("KEY_CSTICK_LEFT", keyMap);
-	systemKeyMap[26] = toSystemKey("KEY_CSTICK_UP", keyMap);
-	systemKeyMap[27] = toSystemKey("KEY_CSTICK_DOWN", keyMap);
+	systemKeyMap[24] = toSystemKey("KEY_CSTICK_RIGHT", config);
+	systemKeyMap[25] = toSystemKey("KEY_CSTICK_LEFT", config);
+	systemKeyMap[26] = toSystemKey("KEY_CSTICK_UP", config);
+	systemKeyMap[27] = toSystemKey("KEY_CSTICK_DOWN", config);
 
-	systemKeyMap[28] = toSystemKey("KEY_CPAD_RIGHT", keyMap);
-	systemKeyMap[29] = toSystemKey("KEY_CPAD_LEFT", keyMap);
-	systemKeyMap[30] = toSystemKey("KEY_CPAD_UP", keyMap);
-	systemKeyMap[31] = toSystemKey("KEY_CPAD_DOWN", keyMap);
+	systemKeyMap[28] = toSystemKey("KEY_CPAD_RIGHT", config);
+	systemKeyMap[29] = toSystemKey("KEY_CPAD_LEFT", config);
+	systemKeyMap[30] = toSystemKey("KEY_CPAD_UP", config);
+	systemKeyMap[31] = toSystemKey("KEY_CPAD_DOWN", config);
 
 	return;
 }
@@ -192,56 +267,133 @@ void clearConsole()
 	return;
 }
 
-int main()
+void loadConfiguration(const string& configPath, INI::INIVariables<>& config, keyCodeMap& systemKeyMap)
 {
-	// Constant variable(s):
-	static const string configPath = "keymap.ini";
-
-	// Local variable(s):
-	bool running = true;
-
-	INI::INIVariables<> keyMap;
-
 	try
 	{
-		INI::load(configPath, keyMap);
+		INI::load(configPath, config);
 	}
 	catch (const INI::fileNotFound<>&)
 	{
-		mapDefaultKeys(keyMap);
+		mapDefaultKeys(config);
+
+		auto& globalSection = config["global"];
+
+		globalSection["vjoy"] = "true";
+		globalSection["keyboard"] = "false";
 
 		// Save our newly generate key-map.
-		INI::save(configPath, keyMap);
+		INI::save(configPath, config);
 	}
 
+	remapKeys(config[INI_3DS_SECTION], systemKeyMap);
+
+	return;
+}
+
+int main()
+{
+	// Constant variable(s):
+	static const string configPath = "config.ini";
+
+	// Local variable(s):
+
+	// This will be used later to toggle program execution.
+	bool running = true;
+
+	// Configuration related:
+	INI::INIVariables<> config;
+
+	// Windows-specific (vJoy):
+	bool vJoyEnabled = false;
+	bool keyboardEnabled = true;
+
+	// This is used to map system keys (Virtual keys) to 3DS button-positions.
 	keyCodeMap systemKeyMap;
 
-	remapKeys(keyMap[INI_3DS_SECTION], systemKeyMap);
+	// Load our configuration file.
+	loadConfiguration(configPath, config, systemKeyMap);
 
-	WSADATA WSADATA;
-	int iResult;
+	// Handle function-specific configurations:
+	{
+		// Global configuration:
+		auto& globalSection = config["global"];
 
+		keyboardEnabled = stringEnabled(globalSection["keyboard"]);
+
+		// Windows-specific (vJoy):
+		vJoyEnabled = stringEnabled(globalSection["vjoy"]);
+	}
+
+	// Windows-specific:
+	
+	#ifdef GAMEPAD_VJOY_DYNAMIC_LINK
+		// This is will be our handle for vJoy's interface DLL.
+		HMODULE vJoyModule = NULL; // nullptr;
+	#endif
+
+	vJoy::vJoyDevice vJoy_3DS = { VJOY_ID_NONE };
+
+	if (vJoyEnabled)
+	{
+		// Namespace(s):
+		using namespace vJoy;
+
+		#ifdef GAMEPAD_VJOY_DYNAMIC_LINK
+			vJoyModule = REAL_VJOY::linkTo();
+			
+			// Assign the 'vJoyEnabled' flag, and check against it:
+			if (vJoyEnabled = (vJoyModule != NULL))
+		#endif
+		{
+			if (vJoyWorking())
+			{
+				for (vJoy_3DS.deviceIdentifier = 1; vJoy_3DS.deviceIdentifier < MAX_VJOY_DEVICES; vJoy_3DS.deviceIdentifier++) // <=
+				{
+					//vJoy_3DS.deviceIdentifier
+					if (REAL_VJOY::GetVJDStatus(vJoy_3DS.deviceIdentifier) == VJD_STAT_FREE)
+					{
+						// Acquire control over the device.
+						if (REAL_VJOY::AcquireVJD(vJoy_3DS.deviceIdentifier))
+						{
+							break;
+						}
+					}
+				}
+
+				// Update the device-object.
+				vJoy_3DS.update();
+			}
+		}
+	}
+
+	// Networking related:
+
+	// Initialize networking/socket functionality.
+	initSockets();
+
+	// This socket will be used to initially connect to a 3DS.
 	SOCKET listenSocket = INVALID_SOCKET;
+
+	// This socket will be used to maintain a connection to a 3DS.
 	SOCKET clientSocket = INVALID_SOCKET;
 
+	// This will represent an array of internal addresses.
 	addrinfo* result = nullptr;
+
+	// This will act as our protocol/networking hints.
 	addrinfo hints = {};
 
-	iResult = WSAStartup(MAKEWORD(2, 2), &WSADATA);
-
-	if (iResult != 0)
-	{
-		cout << "Unable to initialize WSA: " << iResult << endl;
-
-		return ERROR_CODE;
-	}
+	// Setup our protocol hints (TCP, IPV4):
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+	hints.ai_flags = AI_PASSIVE;
 
 	try
 	{
-		hints.ai_family = AF_INET;
-		hints.ai_socktype = SOCK_STREAM;
-		hints.ai_protocol = IPPROTO_TCP;
-		hints.ai_flags = AI_PASSIVE;
+		// Used for basic error handling.
+		int iResult;
 
 		iResult = getaddrinfo(NULL, PORT_STR, &hints, &result); // nullptr
 
@@ -283,19 +435,25 @@ int main()
 		freeaddrinfo(result); // result = nullptr;
 	}
 
-	sockaddr address;
-	int addrlen = sizeof(address);
+	// This address will represent a connected 3DS:
+	sockaddr address; int addrlen = sizeof(address);
 
 	cout << "Waiting for a 3DS..." << endl;
 
+	// Try to connect to a 3DS, if the system declines us 4 times, don't bother:
 	for (int i = 1; (i <= 4 && (clientSocket == INVALID_SOCKET)); i++)
 	{
 		clientSocket = accept(listenSocket, &address, &addrlen);
 	}
 
+	// Check if we were able to connect to a 3DS:
 	if (clientSocket != INVALID_SOCKET)
 	{
 		cout << "3DS found." << endl;
+	}
+	else
+	{
+		running = false;
 	}
 
 	// Since we only need one connection, close the listening-socket:
@@ -310,7 +468,7 @@ int main()
 
 		fullInputData states[FRAMES_PER_SEND] = {};
 
-		iResult = recv(clientSocket, (char*)&states, sizeof(states), 0); // sizeof(fullInputData)*FRAMES_PER_SEND
+		const auto iResult = recv(clientSocket, (char*)&states, sizeof(states), 0); // sizeof(fullInputData)*FRAMES_PER_SEND
 
 		if (iResult > 0)
 		{
@@ -340,19 +498,36 @@ int main()
 
 					if (state.data.kHeld & mask) // ((state.kDown & mask))
 					{
-						//simulateKey(systemKeyMap[i], ACTION_DOWN);
-						simulateKey(systemKeyMap[i], ACTION_UP);
-						simulateKey(systemKeyMap[i], ACTION_DOWN);
+						if (keyboardEnabled)
+						{
+							simulateKey(systemKeyMap[i], ACTION_DOWN);
+						}
 
 						cout << debug_keyNames[i] << " down." << endl;
 					}
 					else if (state.data.kUp & mask)
 					{
-						//simulateKey(systemKeyMap[i], ACTION_DOWN);
-						simulateKey(systemKeyMap[i], ACTION_UP);
+						if (keyboardEnabled)
+						{
+							simulateKey(systemKeyMap[i], ACTION_UP);
+						}
 
 						cout << debug_keyNames[i] << " up." << endl;
 					}
+				}
+
+				if (vJoyEnabled)
+				{
+					// Local variable(s):
+					const auto& ID = vJoy_3DS.deviceIdentifier;
+
+					JOYSTICK_POSITION vState = {};
+
+					vState.bDevice = ID;
+
+					vState.lButtons = (LONG)((state.data.kDown | state.data.kHeld)); // ~ state.data.kUp;
+
+					vJoy::REAL_VJOY::UpdateVJD(ID, &vState);
 				}
 
 				/*
@@ -390,8 +565,24 @@ int main()
 		closesocket(clientSocket);
 	}
 
-	// Free up any resources allocated by WSA.
-	WSACleanup();
+	deinitSockets();
+
+	// Windows-specific (vJoy):
+
+	// Relinquish control over our vJoy device:
+	if (vJoy_3DS.deviceIdentifier != VJOY_ID_NONE)
+	{
+		vJoy::REAL_VJOY::RelinquishVJD(vJoy_3DS.deviceIdentifier);
+	}
+
+	#ifdef GAMEPAD_VJOY_DYNAMIC_LINK
+		// Release our vJoy module:
+		if (vJoyModule != NULL) // nullptr
+		{
+			FreeLibrary(vJoyModule); // vJoyModule = NULL;
+			//vJoy::REAL_VJOY::restoreFunctions();
+		}
+	#endif
 
 	// Return the calculated response.
 	return ((running) ? 0 : ERROR_CODE);

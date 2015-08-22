@@ -13,10 +13,31 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Header Files\external">
+      <UniqueIdentifier>{e0abf43c-f92a-4c68-91c7-6272f2930325}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\external\iosync">
+      <UniqueIdentifier>{ffdaaa3e-e9f6-46b4-9484-85b55104c627}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\external\iosync\winnt">
+      <UniqueIdentifier>{1f0c7cc6-451f-46f0-b7c2-8052e4dd2209}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\external">
+      <UniqueIdentifier>{72444544-ba97-4788-a6d5-242b9b4a3274}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\external\iosync">
+      <UniqueIdentifier>{36ad9d17-f3f0-4706-9767-02d6d35cab29}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\external\iosync\winnt">
+      <UniqueIdentifier>{d3299ec8-edff-4845-bb0d-194794dd80e8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Listener.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="external\iosync\winnt\vJoyDriver.cpp">
+      <Filter>Source Files\external\iosync\winnt</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -28,6 +49,9 @@
     </ClInclude>
     <ClInclude Include="..\3ds_controller\source\support.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="external\iosync\winnt\vjoyDriver.h">
+      <Filter>Header Files\external\iosync\winnt</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
