@@ -708,18 +708,43 @@ int main()
 					*/
 
 					// Touch screen / C-stick:
+					bool removeTouch = false;
+
 					if (vJoy_3DS.hasAxis(HID_USAGE_RX))
 					{
+						if ((vState.lButtons & KEY_TOUCH) > 0)
+						{
+							vJoyTransferAxis(vJoy_3DS, vState, state.ext.touch.px, HID_USAGE_RX, true);
+
+							removeTouch = true;
+						}
+						else
+						{
+							vJoyTransferAxis(vJoy_3DS, vState, _3DS_TOUCH_WIDTH/2, HID_USAGE_RX, true);
+						}
+
 						//vJoyTransferAxis(vJoy_3DS, vState, state.ext.right_analog.dx, HID_USAGE_RX);
-						vJoyTransferAxis(vJoy_3DS, vState, state.ext.touch.px, HID_USAGE_RX, true);
 					}
 
 					if (vJoy_3DS.hasAxis(HID_USAGE_RY))
 					{
-						vState.lButtons ^= (vState.lButtons & KEY_TOUCH);
+						if ((vState.lButtons & KEY_TOUCH) > 0)
+						{
+							vJoyTransferAxis(vJoy_3DS, vState, _3DS_TOUCH_HEIGHT-state.ext.touch.py, HID_USAGE_RY, true);
+
+							removeTouch = true;
+						}
+						else
+						{
+							vJoyTransferAxis(vJoy_3DS, vState, _3DS_TOUCH_HEIGHT/2, HID_USAGE_RY, true);
+						}
 
 						//vJoyTransferAxis(vJoy_3DS, vState, state.ext.right_analog.dy, HID_USAGE_RY);
-						vJoyTransferAxis(vJoy_3DS, vState, state.ext.touch.py, HID_USAGE_RY, true);
+					}
+
+					if (removeTouch)
+					{
+						vState.lButtons ^= (vState.lButtons & KEY_TOUCH);
 					}
 
 					// Update the device with the newly calculated state.
