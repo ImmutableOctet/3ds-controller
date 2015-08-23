@@ -5,7 +5,7 @@ Functionality is currently experimental. This project is based on an input-demo 
 
 --
 ### Platform Support & Input Methods:
-The host application is currently Windows-only (x86 & x64), and supports both vJoy simulation, and keyboard simulation. Keyboard simulation is currently for debugging purposes; button-holding does not function properly. That being said, **[view below for configuration details](#Configuration)**.
+The host application is currently Windows-only (x86 & x64), and supports both vJoy simulation, and keyboard simulation. Keyboard simulation is currently for debugging purposes; button-holding does not function properly. That being said, **[view below for configuration details](#configuration)**.
 
 vJoy support is dynamic, and will detect the appropriate interface DLL from the system's vJoy installation. However, it does need to be ran/built properly. On x64 systems, an x86 build of the server can not use vJoy. Likewise, an x64 build can not use an x86 installation (Not that something like this would ever happen). Please build/use an appropriate version for your architecture.
 
