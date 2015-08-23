@@ -42,8 +42,9 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
-//#include <thread>
-//#include <chrono>
+
+#include <thread>
+#include <chrono>
 
 #include <QuickLib\QuickINI\QuickINI.h>
 
@@ -672,9 +673,17 @@ int main()
 					const auto& ID = vJoy_3DS.deviceIdentifier;
 
 					JOYSTICK_POSITION vState = {};
+					//bool delay = false;
 
 					vState.bDevice = ID;
 					vState.lButtons = (LONG)((state.data.kDown | state.data.kHeld)); // ^ state.data.kUp;
+
+					/*
+					if ((sID+1) < statesAvailable && (vState.lButtons & (KEY_CPAD_UP|KEY_CPAD_DOWN|KEY_CPAD_LEFT|KEY_CPAD_RIGHT)) > 0)
+					{
+						delay = true;
+					}
+					*/
 
 					// CirclePad:
 					if (vJoy_3DS.hasAxis(HID_USAGE_X))
@@ -749,14 +758,14 @@ int main()
 
 					// Update the device with the newly calculated state.
 					vJoy::REAL_VJOY::UpdateVJD(ID, &vState);
-				}
 
-				/*
-				if ((sID+1) < statesAvailable)
-				{
-					this_thread::sleep_for((chrono::milliseconds)16);
+					/*
+					if (delay)
+					{
+						this_thread::sleep_for((chrono::milliseconds)8); // FRAMES_PER_SEND
+					}
+					*/
 				}
-				*/
 			}
 		}
 		else if (iResult == 0)
