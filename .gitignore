@@ -1,5 +1,6 @@
 _*
-*config.ini
+*.ini
+*.zip
 *.3ds*
 *.elf
 *.smdh

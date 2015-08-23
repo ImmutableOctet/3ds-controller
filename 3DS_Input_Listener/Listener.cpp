@@ -19,6 +19,8 @@
 
 #define _3DS_CPAD_MAX 160 // 158 // 155 // 128
 #define _3DS_PAD_MASK (KEY_DUP|KEY_DDOWN|KEY_DLEFT|KEY_DRIGHT)
+#define _3DS_TOUCH_WIDTH 320
+#define _3DS_TOUCH_HEIGHT 240
 
 #define _3DS_NETINPUT_SHARED_SUPPORT_LIB
 
@@ -313,13 +315,28 @@ bool vJoyWorking()
 	return false;
 }
 
-LONG vJoyCapAxis(vJoy::vJoyDevice& device, const u32 value, const UINT axis, const UINT maximum_value=_3DS_CPAD_MAX) // SHRT_MAX
+LONG vJoyMapAxis(vJoy::vJoyDevice& device, const u32 value, const UINT axis, const UINT maximum_value=_3DS_CPAD_MAX) // SHRT_MAX
 {
 	// Local variable(s):
 	const auto axisInfo = device.getAxis(axis)->second;
 	const auto axis_mid = ((axisInfo.max - axisInfo.min) / 2);
 
 	return axis_mid + (value * (axis_mid / maximum_value));
+}
+
+LONG vJoyCapAxis(vJoy::vJoyDevice& device, const u32 value, const UINT axis, const UINT maximum_value)
+{
+	// Local variable(s):
+	const auto half_max = (maximum_value/2);
+
+	const auto axisInfo = device.getAxis(axis)->second;
+	const LONG axis_mid = ((axisInfo.max - axisInfo.min) / 2);
+	const double scalar = std::max(((double)axis_mid / (double)half_max), 1.0);
+	const LONG svalue = ((LONG)value - half_max);
+	const LONG scaled_value = (LONG)((double)(svalue) * scalar);
+	const LONG real_value = (axis_mid + scaled_value);
+
+	return std::max(axisInfo.min, std::min(real_value, axisInfo.max));
 }
 
 LONG vJoyScaleAxis(vJoy::vJoyDevice& device, const u32 value, const UINT axis, const UINT maximum_value=_3DS_CPAD_MAX)
@@ -331,18 +348,18 @@ LONG vJoyScaleAxis(vJoy::vJoyDevice& device, const u32 value, const UINT axis, c
 }
 
 // The 'value' argument depends on the axis used.
-void vJoyTransferAxis(vJoy::vJoyDevice& device, JOYSTICK_POSITION& vState, const u32 value, const UINT axis)
+void vJoyTransferAxis(vJoy::vJoyDevice& device, JOYSTICK_POSITION& vState, const u32 value, const UINT axis, bool alt=false)
 {
 	if (device.hasAxis(axis))
 	{
 		switch (axis)
 		{
 			case HID_USAGE_X:
-				vState.wAxisX = vJoyCapAxis(device, value, axis);
+				vState.wAxisX = vJoyMapAxis(device, value, axis);
 
 				break;
 			case HID_USAGE_Y:
-				vState.wAxisY = vJoyCapAxis(device, value, axis);
+				vState.wAxisY = vJoyMapAxis(device, value, axis);
 
 				break;
 			case HID_USAGE_Z:
@@ -365,8 +382,28 @@ void vJoyTransferAxis(vJoy::vJoyDevice& device, JOYSTICK_POSITION& vState, const
 				break;
 			case HID_USAGE_SL0:
 				vState.wSlider = vJoyScaleAxis(device, value, axis, 63); // 64
-			//case HID_USAGE_RX:
-			//case HID_USAGE_RY:
+			case HID_USAGE_RX:
+				if (alt)
+				{
+					vState.wAxisXRot = vJoyCapAxis(device, value, axis, _3DS_TOUCH_WIDTH);
+				}
+				else
+				{
+					// Nothing so far.
+				}
+
+				break;
+			case HID_USAGE_RY:
+				if (alt)
+				{
+					vState.wAxisYRot = vJoyCapAxis(device, value, axis, _3DS_TOUCH_HEIGHT);
+				}
+				else
+				{
+					// Nothing so far.
+				}
+
+				break;
 			case HID_USAGE_POV:
 				{
 					if (device.contPOVNumber > 0)
@@ -669,12 +706,21 @@ int main()
 						vJoyTransferAxis(vJoy_3DS, vState, state.data.kHeld, HID_USAGE_Z);
 					}
 					*/
-					
-					/*
-						// C-stick:
-						vJoyTransferAxis(vJoy_3DS, vState, state.ext.right_analog.dx, HID_USAGE_RX);
-						vJoyTransferAxis(vJoy_3DS, vState, state.ext.right_analog.dy, HID_USAGE_RY);
-					*/
+
+					// Touch screen / C-stick:
+					if (vJoy_3DS.hasAxis(HID_USAGE_RX))
+					{
+						//vJoyTransferAxis(vJoy_3DS, vState, state.ext.right_analog.dx, HID_USAGE_RX);
+						vJoyTransferAxis(vJoy_3DS, vState, state.ext.touch.px, HID_USAGE_RX, true);
+					}
+
+					if (vJoy_3DS.hasAxis(HID_USAGE_RY))
+					{
+						vState.lButtons ^= (vState.lButtons & KEY_TOUCH);
+
+						//vJoyTransferAxis(vJoy_3DS, vState, state.ext.right_analog.dy, HID_USAGE_RY);
+						vJoyTransferAxis(vJoy_3DS, vState, state.ext.touch.py, HID_USAGE_RY, true);
+					}
 
 					// Update the device with the newly calculated state.
 					vJoy::REAL_VJOY::UpdateVJD(ID, &vState);
